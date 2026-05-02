@@ -54,7 +54,7 @@ impl Expr {
     fn subst(&mut self, var_idx: usize, value: &Expr) {
         match self {
             BVar(n) => {
-                if *n == var_idx { *self = value.clone(); }
+                if *n == var_idx { *self = value.clone(); } 
                 else if *n > var_idx { *n -= 1; }
             }
             Sort(_) | Inductive(_) | Constructor(_, _) | Const(_) => {}
@@ -90,7 +90,7 @@ impl Expr {
                 new_self = Some(new_body);
             }
             App(f, arg) => {
-                f.whnf(ctx);
+                f.whnf(ctx); 
                 if let Lam(_ty, body) = &**f {
                     let mut new_body = *body.clone();
                     new_body.subst(0, arg);
@@ -134,9 +134,9 @@ impl Expr {
 
 pub struct Context {
     types: Vec<Expr>,
-    pub env: HashMap<String, Expr>,
-    pub ctors: HashMap<String, (String, usize)>,
-    pub defs: HashMap<String, (Expr, Expr)>,
+    pub env: HashMap<String, Expr>,           
+    pub ctors: HashMap<String, (String, usize)>, // 記錄 Constructor 名稱 -> (所屬 Inductive, Tag索引)
+    pub defs: HashMap<String, (Expr, Expr)>,  
 }
 
 impl Context {
@@ -197,18 +197,21 @@ impl Context {
                 self.types.push(*ty.clone());
                 let body_ty = self.infer_type(body)?;
                 self.types.pop();
-                // Close the body type by substituting the fix expression for BVar(0)
                 let fix_expr = Fix(ty.clone(), body.clone());
                 let mut closed_body_ty = body_ty.clone();
                 closed_body_ty.subst(0, &fix_expr);
+                let mut w1 = closed_body_ty.clone(); w1.nf(self);
+                let mut w2 = *ty.clone(); w2.nf(self);
+                // println!("closed_body_ty (nf): {:?}", w1);
+                // println!("decl_ty        (nf): {:?}", w2);
                 if !is_def_eq(&closed_body_ty, ty, self) {
                     return Err("Fixpoint type mismatch".into());
                 }
                 Ok(*ty.clone())
             }
             Match(_, target, motive, _) => {
-                // If motive is a Lam, apply it to target (dependent match).
-                // If motive is already a type, return it directly.
+                // If motive is already a type (not a function), return it directly.
+                // If motive is a function (Pi-abstracted over scrutinee), apply it.
                 let mut motive_whnf = *motive.clone();
                 motive_whnf.whnf(self);
                 match motive_whnf {
@@ -246,86 +249,6 @@ fn is_def_eq(e1: &Expr, e2: &Expr, ctx: &Context) -> bool {
     let mut w2 = e2.clone(); w2.nf(ctx);
     structural_eq(&w1, &w2, ctx)
 }
-
-// ==========================================
-// Pretty Printer
-// ==========================================
-
-/// Try to interpret an Expr as a Nat literal.
-/// Constructor("Nat", 0) = zero, App(Constructor("Nat", 1), n) = succ n
-fn try_to_nat(expr: &Expr) -> Option<usize> {
-    match expr {
-        Constructor(ind, 0) if ind == "Nat" => Some(0),
-        App(f, arg) => {
-            if let Constructor(ind, 1) = f.as_ref() {
-                if ind == "Nat" {
-                    return try_to_nat(arg).map(|n| n + 1);
-                }
-            }
-            None
-        }
-        _ => None,
-    }
-}
-
-fn needs_parens_arg(expr: &Expr) -> bool {
-    matches!(expr, App(_, _) | Lam(_, _) | Pi(_, _) | Fix(_, _) | Let(_, _, _))
-}
-
-fn pretty(expr: &Expr, ctx: &Context) -> String {
-    // Try Nat literal first
-    if let Some(n) = try_to_nat(expr) {
-        return n.to_string();
-    }
-    match expr {
-        BVar(n) => format!("#{}", n),
-        Sort(0) => "Prop".into(),
-        Sort(1) => "Type".into(),
-        Sort(u) => format!("Sort {}", u),
-        Const(name) => name.clone(),
-        Inductive(name) => name.clone(),
-        Constructor(ind, tag) => {
-            if let Some((name, _)) = ctx.ctors.iter().find(|(_, (i, t))| i == ind && t == tag) {
-                return name.clone();
-            }
-            format!("{}.ctor{}", ind, tag)
-        }
-        App(f, arg) => {
-            let f_str = pretty(f, ctx);
-            let arg_str = pretty(arg, ctx);
-            let arg_fmt = if needs_parens_arg(arg) {
-                format!("({})", arg_str)
-            } else {
-                arg_str
-            };
-            format!("{} {}", f_str, arg_fmt)
-        }
-        Lam(ty, body) => {
-            format!("fun (_ : {}) => {}", pretty(ty, ctx), pretty(body, ctx))
-        }
-        Pi(ty, body) => {
-            format!("{} -> {}", pretty(ty, ctx), pretty(body, ctx))
-        }
-        Fix(ty, body) => {
-            format!("fix _ : {} => {}", pretty(ty, ctx), pretty(body, ctx))
-        }
-        Let(ty, val, body) => {
-            format!("let _ : {} := {}; {}", pretty(ty, ctx), pretty(val, ctx), pretty(body, ctx))
-        }
-        Match(ind, target, motive, branches) => {
-            let bs: Vec<String> = branches.iter().enumerate().map(|(i, b)| {
-                let ctor_name = ctx.ctors.iter()
-                    .find(|(_, (ii, t))| ii == ind && *t == i)
-                    .map(|(k, _)| k.as_str())
-                    .unwrap_or("_");
-                format!("| {} => {}", ctor_name, pretty(b, ctx))
-            }).collect();
-            format!("match {} return {} with {}",
-                pretty(target, ctx), pretty(motive, ctx), bs.join(" "))
-        }
-    }
-}
-
 // ==========================================
 // 微型 Lean 4 解析器 (Recursive Descent)
 // ==========================================
@@ -353,15 +276,6 @@ fn parse_atom(p: &mut Parser, locals: &mut Vec<String>, ctx: &Context) -> Expr {
         return e;
     }
     if tok == "Sort" { return Sort(p.next_tok().parse().unwrap()); }
-
-    // Feature 1: Natural number literals
-    if let Ok(n) = tok.parse::<usize>() {
-        let zero = Constructor("Nat".into(), 0);
-        return (0..n).fold(zero, |acc, _| {
-            App(Box::new(Constructor("Nat".into(), 1)), Box::new(acc))
-        });
-    }
-
     if let Some(idx) = locals.iter().rev().position(|x| x == &tok) { return BVar(idx); }
     if let Some((ind, tag)) = ctx.ctors.get(&tok) { return Constructor(ind.clone(), *tag); }
     if ctx.env.contains_key(&tok) { return Inductive(tok); }
@@ -378,45 +292,11 @@ fn parse_app(p: &mut Parser, locals: &mut Vec<String>, ctx: &Context) -> Expr {
 }
 
 fn parse_arrow(p: &mut Parser, locals: &mut Vec<String>, ctx: &Context) -> Expr {
-    // Feature 3: Named Pi type  (name : Type) -> Body
-    // Lookahead: ( ident : ... ) ->
-    if p.peek().map(|s| s.as_str()) == Some("(") {
-        let saved_pos = p.pos;
-        p.pos += 1; // consume "("
-        // peek at next two tokens: should be <ident> ":"
-        let maybe_name = p.peek().cloned();
-        if let Some(name) = maybe_name {
-            // Check it looks like an identifier (not a keyword / operator)
-            let is_ident = !is_terminator(&name) && name != "(" && name != "fun"
-                && name != "fix" && name != "let" && name != "match" && name != "Sort";
-            if is_ident {
-                p.pos += 1; // consume name
-                if p.peek().map(|s| s.as_str()) == Some(":") {
-                    p.pos += 1; // consume ":"
-                    let ty = parse_expr(p, locals, ctx);
-                    if p.peek().map(|s| s.as_str()) == Some(")") {
-                        p.pos += 1; // consume ")"
-                        if p.peek().map(|s| s.as_str()) == Some("->") {
-                            p.pos += 1; // consume "->"
-                            locals.push(name);
-                            let body = parse_arrow(p, locals, ctx);
-                            locals.pop();
-                            return Pi(Box::new(ty), Box::new(body));
-                        }
-                    }
-                }
-            }
-        }
-        // Not a named Pi — backtrack and fall through
-        p.pos = saved_pos;
-    }
-
-    // Original arrow parsing
     let mut res = parse_app(p, locals, ctx);
     while p.peek().map(|s| s.as_str()) == Some("->") {
         p.consume("->");
         let right = parse_arrow(p, locals, ctx);
-        let mut body = right;
+        let mut body = right; 
         body.lift(1, 0);
         res = Pi(Box::new(res), Box::new(body));
     }
@@ -451,7 +331,7 @@ fn parse_expr(p: &mut Parser, locals: &mut Vec<String>, ctx: &Context) -> Expr {
                 let motive = parse_expr(p, locals, ctx); p.consume("with");
                 let mut branches = Vec::new();
                 while !p.eof() && p.peek().map(|s| s.as_str()) == Some("|") {
-                    p.consume("|"); p.next_tok(); p.consume("=>");
+                    p.consume("|"); p.next_tok(); p.consume("=>"); // 略過 constructor name
                     branches.push(parse_expr(p, locals, ctx));
                 }
                 return Match(ind, Box::new(target), Box::new(motive), branches);
@@ -467,6 +347,7 @@ fn run_lean_script(script: &str, ctx: &mut Context) {
         .map(|line| if let Some(idx) = line.find("--") { &line[..idx] } else { line })
         .collect::<Vec<_>>().join(" ");
 
+    // 我們只替換保證安全的符號，避免破壞 :=
     let s = cleaned_script
         .replace("(", " ( ")
         .replace(")", " ) ")
@@ -504,11 +385,10 @@ fn run_lean_script(script: &str, ctx: &mut Context) {
             "#eval" | "#check" => {
                 let mut expr = parse_expr(&mut p, &mut vec![], ctx);
                 if cmd == "#check" {
-                    let ty = ctx.infer_type(&expr).unwrap();
-                    println!("=> Check: {}", pretty(&ty, ctx));
+                    println!("=> Check: {:?}", ctx.infer_type(&expr).unwrap());
                 } else {
                     expr.nf(ctx);
-                    println!("=> Eval: {}", pretty(&expr, ctx));
+                    println!("=> Eval: {:?}", expr);
                 }
             }
             _ => panic!("Unknown command: {}", cmd),
@@ -534,7 +414,6 @@ fn main() {
 
         -- 測試: not true
         #eval not Bool.true
-        #check not
     "#;
 
     let nat_lean = r#"
@@ -543,26 +422,19 @@ fn main() {
           | Nat.zero : Nat
           | Nat.succ : Nat -> Nat
 
-        -- 字面量測試
-        #eval 0
-        #eval 3
-
         -- Let 測試
         #eval let x : Nat := Nat.zero ; Nat.succ x
 
-        -- Add 遞迴加法函數 (使用具名 Pi 型別)
-        def add : (n : Nat) -> (m : Nat) -> Nat :=
-          fix add_fn : (n : Nat) -> (m : Nat) -> Nat =>
+        -- Add 遞迴加法函數
+        def add : Nat -> Nat -> Nat :=
+          fix add_fn : Nat -> Nat -> Nat =>
             fun (n : Nat) => fun (m : Nat) =>
               match Nat , n return Nat with
               | Nat.zero => m
               | Nat.succ => fun (n_prev : Nat) => Nat.succ (add_fn n_prev m)
 
-        -- 測試 2 + 3 = 5
-        #eval add 2 3
-
-        -- #check add
-        #check add
+        -- 測試 1 + 1 (succ zero + succ zero)
+        #eval add (Nat.succ Nat.zero) (Nat.succ Nat.zero)
     "#;
 
     println!("--- 載入 bool.lean ---");

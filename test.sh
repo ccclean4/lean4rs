@@ -1,4 +1,4 @@
 set -x
 rm lean4
 rustc lean4.rs
-./lean4
+RUST_BACKTRACE=1 ./lean4
