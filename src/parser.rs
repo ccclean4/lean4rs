@@ -27,7 +27,7 @@ fn is_terminator(t: &str) -> bool {
         | "#eval" | "#check" | "universe")
 }
 
-fn tokenize(src: &str) -> Vec<String> {
+pub fn tokenize(src: &str) -> Vec<String> {
     let cleaned = src.lines()
         .map(|line| if let Some(i) = line.find("--") { &line[..i] } else { line })
         .collect::<Vec<_>>().join(" ");
@@ -257,7 +257,6 @@ pub fn run_script(script: &str, elab: &mut crate::elaborator::Elaborator) {
                         ctor_name.clone(),
                         (name.clone(), tag, uparams.clone(), ctor_ty.clone()),
                     );
-                    elab.env.inductives.insert(ctor_name.clone(), (uparams.clone(), ctor_ty));
                     tag += 1;
                 }
                 println!("=> Defined inductive: {}", name);

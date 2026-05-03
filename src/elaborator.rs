@@ -246,27 +246,31 @@ impl Elaborator {
                 if let Some(fvar_id) = self.lookup_name(name) {
                     return Ok(Expr::FVar(fvar_id));
                 }
+                if !name.contains('.') {
+                    if let Some((params, _)) = self.env.inductives.get(name) {
+                        let name_clone = name.clone();
+                        let lvls: Vec<Level> = params.iter()
+                            .map(|p| Level::Param(p.clone()))
+                            .collect();
+                        return Ok(Expr::Inductive(name_clone, lvls));
+                    }
+                }
                 if let Some((ind, tag, params, _)) = self.env.ctors.get(name) {
                     let ind_clone = ind.clone();
                     let tag_clone = *tag;
-                    let param_count = params.len();
-                    let lvls: Vec<Level> = (0..param_count)
-                        .map(|_| self.fresh_uvar()).collect();
+                    let lvls: Vec<Level> = params.iter()
+                        .map(|p| Level::Param(p.clone()))
+                        .collect();
                     return Ok(Expr::Constructor(ind_clone, tag_clone, lvls));
                 }
-                if let Some((params, _)) = self.env.inductives.get(name) {
-                    let name_clone = name.clone();
-                    let param_count = params.len();
-                    let lvls: Vec<Level> = (0..param_count)
-                        .map(|_| self.fresh_uvar()).collect();
-                    return Ok(Expr::Inductive(name_clone, lvls));
-                }
-                if let Some((params, _, _)) = self.env.defs.get(name) {
-                    let name_clone = name.clone();
-                    let param_count = params.len();
-                    let lvls: Vec<Level> = (0..param_count)
-                        .map(|_| self.fresh_uvar()).collect();
-                    return Ok(Expr::Const(name_clone, lvls));
+                if !name.contains('.') {
+                    if let Some((params, _, _)) = self.env.defs.get(name) {
+                        let name_clone = name.clone();
+                        let lvls: Vec<Level> = params.iter()
+                            .map(|p| Level::Param(p.clone()))
+                            .collect();
+                        return Ok(Expr::Const(name_clone, lvls));
+                    }
                 }
                 Err(format!("Unknown identifier: {}", name))
             }
