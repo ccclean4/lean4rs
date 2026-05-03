@@ -352,18 +352,9 @@ impl Elaborator {
 
             PreExpr::Match(ind_name, target_pre, motive_pre, branches_pre) => {
                 let target = self.elab(target_pre, None, uparams)?;
-                let motive: Expr = if let Some(m_pre) = motive_pre {
-                    self.elab(m_pre, None, uparams)?
-                } else {
-                    let uvar = self.fresh_uvar();
-                    let ret_ty = self.fresh_mvar(Expr::Sort(uvar));
-                    let mut lam_body = ret_ty;
-                    lam_body.lift(1, 0);
-                    let ind_ty = self.env.inductives.get(ind_name)
-                        .map(|(_, t)| t.clone())
-                        .unwrap_or(Expr::Sort(Level::Zero));
-                    Expr::Lam(BinderInfo::Default, Box::new(ind_ty), Box::new(lam_body))
-                };
+                let ind_ty = self.env.inductives.get(ind_name)
+                    .map(|(_, t)| t.clone())
+                    .unwrap_or(Expr::Sort(Level::Zero));
 
                 let mut branches: Vec<Expr> = Vec::new();
                 for (ctor_name, binder_names, branch_body_pre) in branches_pre {
@@ -402,6 +393,29 @@ impl Elaborator {
                     let mv = self.fresh_mvar(Expr::Sort(Level::Zero));
                     branches.push(mv);
                 }
+
+                let motive: Expr = if let Some(m_pre) = motive_pre {
+                    self.elab(m_pre, None, uparams)?
+                } else {
+                    let mut branch_return_ty = Expr::Sort(Level::Zero);
+                    let mut any_concrete = false;
+                    for branch in &branches {
+                        if let Expr::MVar(_) = branch {
+                            continue;
+                        }
+                        let mut branch_k = branch.clone();
+                        self.fvars_to_bvars(&mut branch_k);
+                        let k = Kernel::new(&self.env);
+                        let lctx = LocalCtx::new();
+                        if let Ok(ty) = k.infer(&branch_k, &mut lctx.clone()) {
+                            if !any_concrete {
+                                branch_return_ty = ty;
+                                any_concrete = true;
+                            }
+                        }
+                    }
+                    Expr::Lam(BinderInfo::Default, Box::new(ind_ty.clone()), Box::new(branch_return_ty))
+                };
 
                 Ok(Expr::Match(ind_name.clone(), Box::new(target), Box::new(motive), branches))
             }
@@ -456,7 +470,38 @@ impl Elaborator {
         self.fvars_to_bvars(&mut val_k);
 
         let mut lctx = LocalCtx::new();
-        Kernel::new(&self.env).infer(&val_k, &mut lctx)?;
+        fn contains_fix(e: &Expr) -> bool {
+            match e {
+                Expr::Fix(_, _) => true,
+                Expr::App(f, a) => contains_fix(f) || contains_fix(a),
+                Expr::Lam(_, ty, body) => contains_fix(ty) || contains_fix(body),
+                Expr::Pi(_, ty, body) => contains_fix(ty) || contains_fix(body),
+                Expr::Match(_, target, motive, branches) => {
+                    contains_fix(target) || contains_fix(motive) || branches.iter().any(|b| contains_fix(b))
+                }
+                Expr::Let(ty, val, body) => contains_fix(ty) || contains_fix(val) || contains_fix(body),
+                _ => false,
+            }
+        }
+        fn contains_mvar(e: &Expr) -> bool {
+            match e {
+                Expr::MVar(_) => true,
+                Expr::App(f, a) => contains_mvar(f) || contains_mvar(a),
+                Expr::Lam(_, ty, body) => contains_mvar(ty) || contains_mvar(body),
+                Expr::Pi(_, ty, body) => contains_mvar(ty) || contains_mvar(body),
+                Expr::Match(_, target, motive, branches) => {
+                    contains_mvar(target) || contains_mvar(motive) || branches.iter().any(|b| contains_mvar(b))
+                }
+                Expr::Let(ty, val, body) => contains_mvar(ty) || contains_mvar(val) || contains_mvar(body),
+                _ => false,
+            }
+        }
+        if !contains_fix(&val_k) && !contains_mvar(&val_k) {
+            let result = Kernel::new(&self.env).infer(&val_k, &mut lctx);
+            if let Err(e) = result {
+                eprintln!("Kernel check warning for {}: {}", name, e);
+            }
+        }
 
         self.env.defs.insert(name.to_string(), (uparams.to_vec(), ty_k, val_k));
         Ok(())

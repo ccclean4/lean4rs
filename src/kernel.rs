@@ -25,6 +25,7 @@ impl GlobalEnv {
     }
 }
 
+#[derive(Clone)]
 pub struct LocalCtx {
     pub types: Vec<Expr>,
 }
@@ -72,24 +73,19 @@ impl<'e> Kernel<'e> {
                     }
                     Expr::Fix(_, body) => {
                         let mut b = *body.clone();
-                        b.subst(0, &**f);
-                        next = Some(Expr::App(Box::new(b), arg.clone()));
+                        self.whnf(&mut b);
+                        b.subst(0, arg);
+                        next = Some(b);
                     }
                     _ => {}
                 }
             }
             Expr::Match(ind_name, target, _motive, branches) => {
                 self.whnf(target);
-                let (head, args) = target.get_app_fn_args();
+                let (head, _args) = target.get_app_fn_args();
                 if let Expr::Constructor(_, tag, _) = head {
-                    if let Some(expected_ctor) = self.env.ctor_tag_of(ind_name, *tag) {
-                        if let Expr::Constructor(c_ind, _, _) = head {
-                            if c_ind == expected_ctor && *tag < branches.len() {
-                                let mut res = branches[*tag].clone();
-                                for a in args { res = Expr::App(Box::new(res), Box::new(a)); }
-                                next = Some(res);
-                            }
-                        }
+                    if self.env.ctor_tag_of(ind_name, *tag).is_some() && *tag < branches.len() {
+                        next = Some(branches[*tag].clone());
                     }
                 }
             }
