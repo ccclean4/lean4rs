@@ -2,7 +2,7 @@
 -- 展示 List, Option, Sum 等常見資料結構
 
 -- List 操作
-def list_examples : List Nat := do
+def list_examples : List Nat :=
   let nums := [1, 2, 3, 4, 5]
   let doubled := nums.map (· * 2)
   let filtered := nums.filter (· > 2)
@@ -11,7 +11,12 @@ def list_examples : List Nat := do
 
 -- 列表推導式
 def list_comprehension : List Nat :=
-  [i * j | i ∈ [1, 2, 3], j ∈ [1, 2, 3]]
+  Id.run do
+    let mut result := []
+    for i in [1, 2, 3] do
+      for j in [1, 2, 3] do
+        result := result ++ [i * j]
+    result
 
 -- Option 類型
 def safeDiv (a b : Nat) : Option Nat :=

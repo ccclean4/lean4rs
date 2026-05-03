@@ -12,9 +12,9 @@ def main : IO Unit := do
   IO.println s!"4 * 2 = {4 * 2}"
   IO.println ""
   IO.println "布林運算："
-  IO.println s!"5 < 3 = {5 < 3}"
-  IO.println s!"5 > 3 = {5 > 3}"
-  IO.println s!"5 == 5 = {5 == 5}"
+  IO.println s!"5 < 3 = {if 5 < 3 then "true" else "false"}"
+  IO.println s!"5 > 3 = {if 5 > 3 then "true" else "false"}"
+  IO.println s!"5 == 5 = {if 5 == 5 then "true" else "false"}"
   IO.println ""
   IO.println "列表操作："
   let nums := [1, 2, 3, 4, 5]

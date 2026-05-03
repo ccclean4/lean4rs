@@ -146,7 +146,6 @@ fn test_kernel_whnf_app_no_reduce() {
 }
 
 #[test]
-#[ignore]
 fn test_kernel_whnf_match() {
     let env = mk_env_with_nat();
     let k = Kernel::new(&env);
@@ -161,7 +160,6 @@ fn test_kernel_whnf_match() {
 }
 
 #[test]
-#[ignore]
 fn test_kernel_whnf_match_succ() {
     let env = mk_env_with_nat();
     let k = Kernel::new(&env);

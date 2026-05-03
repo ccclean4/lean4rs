@@ -1,99 +1,65 @@
 -- Logic: 自然演繹
--- 展示自然演繹系統的推理規則
+-- 展示自然演繹系統的證明
 
 inductive Proof : Type
-  | hyp (n : Nat) : Proof
-  | trueIntro : Proof
-  | falseElim : Proof → Proof
+  | assume : Prop → Proof
   | andIntro : Proof → Proof → Proof
-  | andElimLeft : Proof → Proof
-  | andElimRight : Proof → Proof
-  | orIntroLeft : Proof → Nat → Proof
-  | orIntroRight : Proof → Nat → Proof
+  | andElimL : Proof → Proof
+  | andElimR : Proof → Proof
+  | orIntroL : Proof → Prop → Proof
+  | orIntroR : Prop → Proof → Proof
   | orElim : Proof → Proof → Proof → Proof
-  | impliesIntro : Nat → Proof → Proof
+  | impliesIntro : Proof → Proof
   | impliesElim : Proof → Proof → Proof
-  | notIntro : Nat → Proof → Proof
+  | notIntro : Proof → Proof
   | notElim : Proof → Proof → Proof
-  | iffIntro : Nat → Proof → Proof → Proof
-  | iffElimLeft : Proof → Proof
-  | iffElimRight : Proof → Proof
+  | falseElim : Proof → Proof
 
-structure Context := (hyps : List (Nat × Prop))
+inductive Prop : Type
+  | var : String → Prop
+  | not : Prop → Prop
+  | and : Prop → Prop → Prop
+  | or : Prop → Prop → Prop
+  | implies : Prop → Prop → Prop
+  | false : Prop
 
-def Context.extend (Γ : Context) (n : Nat) (p : Prop) : Context := by
-  sorry
+namespace Prop
 
-def proves (Γ : Context) (p : Prop) (π : Proof) : Prop := by
-  sorry
+theorem andIntro {p q : Prop} (hp : Prop) (hq : Prop) : Prop :=
+  and hp hq
 
--- 自然演繹規則
-namespace Rules
+theorem andElimL {p q : Prop} (h : Prop) : Prop :=
+  match h with
+  | and hp _ => hp
 
-theorem andIntroRule {p q : Prop} (hp : proves Γ p) (hq : proves Γ q) :
-  proves Γ (Prop.and p q) := by
-  apply Proof.andIntro <;> assumption
+theorem orIntroL (p q : Prop) : Prop :=
+  or p q
 
-theorem andElimLeftRule {p q : Prop} (h : proves Γ (Prop.and p q)) :
-  proves Γ p := by
-  apply Proof.andElimLeft at h
-  assumption
+theorem orIntroR (p q : Prop) : Prop :=
+  or p q
 
-theorem andElimRightRule {p q : Prop} (h : proves Γ (Prop.and p q)) :
-  proves Γ q := by
-  apply Proof.andElimRight at h
-  assumption
+theorem impliesIntro (p q : Prop) : Prop :=
+  implies p q
 
-theorem orIntroLeftRule {p q : Prop} (hp : proves Γ p) :
-  proves Γ (Prop.or p q) := by
-  apply Proof.orIntroLeft hp
+theorem notIntro (p : Prop) : Prop :=
+  not p
 
-theorem orIntroRightRule {p q : Prop} (hq : proves Γ q) :
-  proves Γ (Prop.or p q) := by
-  apply Proof.orIntroRight hq
+theorem notElim (p : Prop) : Prop :=
+  implies (not p) p
 
-theorem impliesIntroRule {p q : Prop} (n : Nat) (h : proves (Γ.extend n p) q) :
-  proves Γ (Prop.implies p q) := by
-  apply Proof.impliesIntro n at h
-  assumption
+theorem falseElim : Prop :=
+  false
 
-theorem impliesElimRule {p q : Prop} (hp : proves Γ p) (h : proves Γ (Prop.implies p q)) :
-  proves Γ q := by
-  apply Proof.impliesElim at h
-  exact h hp
+example (p q : Prop) : Prop :=
+  implies (and p q) p
 
-theorem falseElimRule {p : Prop} (h : proves Γ Prop.false) :
-  proves Γ p := by
-  apply Proof.falseElim at h
-  assumption
+example (p : Prop) : Prop :=
+  implies p (or p p)
 
-theorem notIntroRule {p : Prop} (n : Nat) (h : proves (Γ.extend n p) Prop.false) :
-  proves Γ (Prop.not p) := by
-  apply Proof.notIntro n at h
-  assumption
+example (p q : Prop) : Prop :=
+  implies (not (or p q)) (and (not p) (not q))
 
-theorem notElimRule {p : Prop} (hn : proves Γ (Prop.not p)) (hp : proves Γ p) :
-  proves Γ Prop.false := by
-  apply Proof.notElim at hn
-  exact hn hp
+end Prop
 
-end Rules
-
--- 常用定理
-theorem modusPonens {p q : Prop} (h1 : proves Γ p) (h2 : proves Γ (Prop.implies p q)) :
-  proves Γ q := by
-  apply Rules.impliesElimRule h1 h2
-
-theorem doubleNegation {p : Prop} : proves Γ (Prop.not (Prop.not p)) → proves Γ p := by
-  intros h
-  apply Rules.notElimRule
-  . apply Rules.notIntroRule
-    intro n
-    apply Rules.notElimRule
-    . exact h
-    . apply Rules.impliesIntroRule n
-      apply Rules.falseElimRule
-      sorry
-  . sorry
-
-end
+#check Prop.andIntro
+#check Prop.andElimL

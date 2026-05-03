@@ -60,7 +60,7 @@ fn test_tokenize_unicode_arrows() {
 #[test]
 fn test_tokenize_universe_params() {
     let tokens = parser::tokenize("def List.{u} : Sort u -> Type");
-    assert_eq!(tokens, vec!["def", "List.", "{", "u", "}", ":", "Sort", "u", "->", "Type"]);
+    assert_eq!(tokens, vec!["def", "List", ".", "{", "u", "}", ":", "Sort", "u", "->", "Type"]);
 }
 
 #[test]

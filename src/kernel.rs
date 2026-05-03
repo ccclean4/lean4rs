@@ -81,11 +81,15 @@ impl<'e> Kernel<'e> {
             Expr::Match(ind_name, target, _motive, branches) => {
                 self.whnf(target);
                 let (head, args) = target.get_app_fn_args();
-                if let Expr::Constructor(c_ind, tag, _) = head {
-                    if *c_ind == *ind_name && *tag < branches.len() {
-                        let mut res = branches[*tag].clone();
-                        for a in args { res = Expr::App(Box::new(res), Box::new(a)); }
-                        next = Some(res);
+                if let Expr::Constructor(_, tag, _) = head {
+                    if let Some(expected_ctor) = self.env.ctor_tag_of(ind_name, *tag) {
+                        if let Expr::Constructor(c_ind, _, _) = head {
+                            if c_ind == expected_ctor && *tag < branches.len() {
+                                let mut res = branches[*tag].clone();
+                                for a in args { res = Expr::App(Box::new(res), Box::new(a)); }
+                                next = Some(res);
+                            }
+                        }
                     }
                 }
             }

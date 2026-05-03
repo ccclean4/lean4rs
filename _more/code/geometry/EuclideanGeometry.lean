@@ -1,75 +1,56 @@
--- Geometry: 平面幾何定理
--- 展示幾何命題的形式化證明
+-- Geometry: 歐氏幾何
+-- 展示歐氏幾何的基本概念
 
-structure Triangle where
-  A : Point
-  B : Point
-  C : Point
-  nonDegenerate : B ≠ A ∧ C ≠ A ∧ B ≠ C
+structure Point where
+  x : Float
+  y : Float
 
-def Triangle.sideLengths (t : Triangle) : Float × Float × Float :=
-  (Point.distance t.B t.C,
-   Point.distance t.A t.C,
-   Point.distance t.A t.B)
+structure Line where
+  a : Float
+  b : Float
+  c : Float
 
-def Triangle.perimeter (t : Triangle) : Float :=
-  let (a, b, c) := sideLengths t
-  a + b + c
+namespace Point
 
-def Triangle.area (t : Triangle) : Float := do
-  let (a, b, c) := sideLengths t
-  let s := (a + b + c) / 2
-  sqrt (s * (s - a) * (s - b) * (s - c))
+def distance (p1 p2 : Point) : Float :=
+  let dx := p2.x - p1.x
+  let dy := p2.y - p1.y
+  Float.sqrt (dx * dx + dy * dy)
 
-def Triangle.isEquilateral (t : Triangle) : Bool := do
-  let (a, b, c) := sideLengths t
-  a ≈ b ∧ b ≈ c
+def midpoint (p1 p2 : Point) : Point :=
+  ⟨ (p1.x + p2.x) / 2.0, (p1.y + p2.y) / 2.0 ⟩
 
-def Triangle.isIsosceles (t : Triangle) : Bool := do
-  let (a, b, c) := sideLengths t
-  a ≈ b ∨ b ≈ c ∨ a ≈ c
+def collinear (p1 p2 p3 : Point) : Bool :=
+  let area := (p2.x - p1.x) * (p3.y - p1.y) - (p3.x - p1.x) * (p2.y - p1.y)
+  Float.abs area < 0.0001
 
-def Triangle.isRight (t : Triangle) : Bool := do
-  let (a, b, c) := sideLengths t
-  a^2 + b^2 ≈ c^2 ∨ b^2 + c^2 ≈ a^2 ∨ a^2 + c^2 ≈ b^2
+end Point
 
-structure Circle where
-  center : Point
-  radius : Float
-  valid : radius > 0
+namespace Line
 
-def Circle.contains (γ : Circle) (p : Point) : Bool :=
-  Point.distance p γ.center ≤ γ.radius
+def fromPoints (p1 p2 : Point) : Line :=
+  let a := p2.y - p1.y
+  let b := p1.x - p2.x
+  let c := a * p1.x + b * p1.y
+  ⟨ a, b, -c ⟩
 
-def Circle.area (γ : Circle) : Float :=
-  Float.pi * γ.radius^2
+def distanceToPoint (l : Line) (p : Point) : Float :=
+  Float.abs (l.a * p.x + l.b * p.y + l.c) / Float.sqrt (l.a * l.a + l.b * l.b)
 
-def Circle.circumference (γ : Circle) : Float :=
-  2 * Float.pi * γ.radius
+def intersect (l1 l2 : Line) : Option Point :=
+  let det := l1.a * l2.b - l2.a * l1.b
+  if Float.abs det < 0.0001 then none
+  else
+    let x := (l2.b * (-l1.c) - l1.b * (-l2.c)) / det
+    let y := (l1.a * (-l2.c) - l2.a * (-l1.c)) / det
+    some ⟨ x, y ⟩
 
-def Circle.intersectsLine (γ : Circle) (l : Line) : Bool := do
-  let d := abs (l.a * γ.center.x + l.b * γ.center.y + l.c) / sqrt (l.a^2 + l.b^2)
-  d ≤ γ.radius
+end Line
 
-structure Polygon where
-  vertices : List Point
-  simple : ∀ i j, i ≠ j → vertices[i] ≠ vertices[j]
+#eval Point.distance ⟨0.0, 0.0⟩ ⟨3.0, 4.0⟩
+#eval Point.midpoint ⟨0.0, 0.0⟩ ⟨4.0, 6.0⟩
 
-def Polygon.perimeter (P : Polygon) : Float := do
-  let n := P.vertices.length
-  let rec loop (i : Nat) (acc : Float) : Float :=
-    if i = n then acc
-    else loop (i + 1) (acc + Point.distance P.vertices[i] P.vertices[(i+1) % n])
-  loop 0 0
+#eval Line.fromPoints ⟨0.0, 0.0⟩ ⟨1.0, 1.0⟩
 
-def Point.inTriangle (p : Triangle) : Bool := do
-  let (a, b, c) := (p.x, p.y, 1)
-  let (a1, b1, c1) := (t.A.x, t.A.y, 1)
-  let (a2, b2, c2) := (t.B.x, t.B.y, 1)
-  let (a3, b3, c3) := (t.C.x, t.C.y, 1)
-  let d1 := a * (b1 - c1) + b * (c1 - a1) + c * (a1 - b1)
-  let d2 := a * (b2 - c2) + b * (c2 - a2) + c * (a2 - b2)
-  let d3 := a * (b3 - c3) + b * (c3 - a3) + c * (a3 - b3)
-  (d1 ≥ 0 ∧ d2 ≥ 0 ∧ d3 ≥ 0) ∨ (d1 ≤ 0 ∧ d2 ≤ 0 ∧ d3 ≤ 0)
-
-end
+example : Point := ⟨ 1.0, 2.0 ⟩
+example : Line := ⟨ 1.0, -1.0, 0.0 ⟩

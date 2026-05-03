@@ -1,86 +1,53 @@
 -- Logic: 謂詞邏輯
--- 展示一階謂詞邏輯的語法與推理
+-- 展示一階謂詞邏輯的基本概念
 
 inductive Term : Type
   | var : String → Term
-  | func : String → List Term → Term
+  | const : String → Term
+  | app : String → List Term → Term
 
 inductive Formula : Type
-  | pred : String → List Term → Formula
-  | true : Formula
-  | false : Formula
+  | eq : Term → Term → Formula
+  | rel : String → List Term → Formula
+  | not : Formula → Formula
   | and : Formula → Formula → Formula
   | or : Formula → Formula → Formula
   | implies : Formula → Formula → Formula
-  | not : Formula → Formula
   | forall : String → Formula → Formula
   | exists : String → Formula → Formula
+  | true : Formula
+  | false : Formula
 
 namespace Formula
 
-def not (φ : Formula) : Formula := Formula.not φ
+def freeVars : Formula → List String
+  | eq t1 t2 => []
+  | rel _ args => []
+  | not f => freeVars f
+  | and f1 f2 => freeVars f1 ++ freeVars f2
+  | or f1 f2 => freeVars f1 ++ freeVars f2
+  | implies f1 f2 => freeVars f1 ++ freeVars f2
+  | forall x f => freeVars f |>.filter (x != ·)
+  | exists x f => freeVars f |>.filter (x != ·)
+  | true => []
+  | false => []
 
-def exists (x : String) (φ : Formula) : Formula := Formula.exists x φ
-
-def forall (x : String) (φ : Formula) : Formula := Formula.forall x φ
-
--- 自由變數
-def freeVars : Term → List String
-  | .var x => [x]
-  | .func _ args => args >>= freeVars
-
-def freeVarsFormula : Formula → List String
-  | .pred _ args => args >>= freeVars
-  | .true => []
-  | .false => []
-  | .and φ ψ => freeVarsFormula φ ∪ freeVarsFormula ψ
-  | .or φ ψ => freeVarsFormula φ ∪ freeVarsFormula ψ
-  | .implies φ ψ => freeVarsFormula φ ∪ freeVarsFormula ψ
-  | .not φ => freeVarsFormula φ
-  | .forall x φ => freeVarsFormula φ |>.erase x
-  | .exists x φ => freeVarsFormula φ |>.erase x
-
--- 閉式（無自由變數）
-def closed (φ : Formula) : Prop := freeVarsFormula φ = []
-
--- 代換
-def substitute (φ : Formula) (x : String) (t : Term) : Formula := by
-  sorry
-
--- 論域
-structure Structure where
-  domain : Type
-  interpretations : String → (List Term → domain) → domain
-
--- 模型關係
-inductive satisfies {M : Structure} (γ : String → M.domain) : Formula → Prop
-  | true : satisfies Formula.true
-  | pred {name args} : sorry → satisfies (Formula.pred name args)
-  | and {φ ψ} : satisfies φ → satisfies ψ → satisfies (Formula.and φ ψ)
-  | orLeft {φ ψ} : satisfies φ → satisfies (Formula.or φ ψ)
-  | orRight {φ ψ} : satisfies ψ → satisfies (Formula.or φ ψ)
-  | implies {φ ψ} : (¬satisfies φ ∨ satisfies ψ) → satisfies (Formula.implies φ ψ)
-  | not {φ} : ¬satisfies φ → satisfies (Formula.not φ)
-  | forall {x φ} : ∀ d : M.domain, satisfies (update γ x d) φ → satisfies (Formula.forall x φ)
-  | exists {x φ} : ∃ d : M.domain, satisfies (update γ x d) φ → satisfies (Formula.exists x φ)
-
-def models (M : Structure) (φ : Formula) : Prop := ∀ γ, satisfies γ φ
-
-def valid (φ : Formula) : Prop := ∀ M γ, satisfies γ φ
-
--- 範例
-def greater (x y : String) : Formula := Formula.pred ">" [Term.var x, Term.var y]
-
-def isEven (x : String) : Formula := Formula.pred "Even" [Term.var x]
-
-def example_forall : Formula := Formula.forall "x" (Formula.forall "y" (greater "y" "x" → Formula.false))
-
-def example_exists : Formula := Formula.exists "x" (Formula.pred "Prime" [Term.var x])
-
--- 自然數結構
-def NatStructure : Structure := {
-  domain := Nat,
-  interpretations := fun ">" args => args[0] > args[1]
-}
+def subst (x : String) (t : Term) : Formula → Formula
+  | eq t1 t2 => eq t1 t2
+  | rel r args => rel r args
+  | not f => not (subst x t f)
+  | and f1 f2 => and (subst x t f1) (subst x t f2)
+  | or f1 f2 => or (subst x t f1) (subst x t f2)
+  | implies f1 f2 => implies (subst x t f1) (subst x t f2)
+  | forall y f => if y = x then forall y f else forall y (subst x t f)
+  | exists y f => if y = x then exists y f else exists y (subst x t f)
+  | true => true
+  | false => false
 
 end Formula
+
+#check Formula.forall "x" (Formula.rel "P" [Term.var "x"])
+#check Formula.exists "x" (Formula.eq (Term.var "x") (Term.const "a"))
+
+#eval Formula.freeVars (Formula.forall "x" (Formula.rel "P" [Term.var "x"]))
+#eval Formula.freeVars (Formula.rel "P" [Term.var "x", Term.var "y"])

@@ -246,6 +246,7 @@ impl Elaborator {
                 if let Some(fvar_id) = self.lookup_name(name) {
                     return Ok(Expr::FVar(fvar_id));
                 }
+                eprintln!("DEBUG Var: name='{}' inductives_keys={:?}", name, self.env.inductives.keys().collect::<Vec<_>>());
                 if !name.contains('.') {
                     if let Some((params, _)) = self.env.inductives.get(name) {
                         let name_clone = name.clone();
@@ -263,14 +264,12 @@ impl Elaborator {
                         .collect();
                     return Ok(Expr::Constructor(ind_clone, tag_clone, lvls));
                 }
-                if !name.contains('.') {
-                    if let Some((params, _, _)) = self.env.defs.get(name) {
-                        let name_clone = name.clone();
-                        let lvls: Vec<Level> = params.iter()
-                            .map(|p| Level::Param(p.clone()))
-                            .collect();
-                        return Ok(Expr::Const(name_clone, lvls));
-                    }
+                if let Some((params, _, _)) = self.env.defs.get(name) {
+                    let name_clone = name.clone();
+                    let lvls: Vec<Level> = params.iter()
+                        .map(|p| Level::Param(p.clone()))
+                        .collect();
+                    return Ok(Expr::Const(name_clone, lvls));
                 }
                 Err(format!("Unknown identifier: {}", name))
             }
@@ -445,6 +444,8 @@ impl Elaborator {
 
     pub fn elab_def(&mut self, name: &str, uparams: &[String],
                     ty_pre: &PreExpr, val_pre: &PreExpr) -> Result<(), String> {
+        self.env.defs.insert(name.to_string(), (uparams.to_vec(), Expr::Sort(Level::Zero), Expr::Sort(Level::Zero)));
+
         let ty = self.elab(ty_pre, None, uparams)?;
         let mut ty_k = ty.clone();
         self.apply_mvar_sols(&mut ty_k);

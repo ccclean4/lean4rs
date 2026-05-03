@@ -8,6 +8,7 @@ struct Parser {
 
 impl Parser {
     fn peek(&self) -> Option<&str> { self.tokens.get(self.pos).map(|s| s.as_str()) }
+    fn peek_nth(&self, n: usize) -> Option<&str> { self.tokens.get(self.pos + n).map(|s| s.as_str()) }
     fn next_tok(&mut self) -> String {
         let t = self.tokens[self.pos].clone();
         self.pos += 1;
@@ -19,6 +20,31 @@ impl Parser {
     }
     fn eof(&self) -> bool { self.pos >= self.tokens.len() }
     fn at(&self, s: &str) -> bool { self.peek() == Some(s) }
+}
+
+fn read_ident(p: &mut Parser) -> String {
+    let first = p.next_tok();
+    let mut name = first;
+    while p.at(".") {
+        p.pos += 1;
+        if let Some(next) = p.peek() {
+            if next == "{" || next == "[" || next == "(" || is_terminator(next) {
+                p.pos -= 1;
+                break;
+            }
+            if next == "." {
+                if let Some(after_dot) = p.peek_nth(1) {
+                    if after_dot == "{" || after_dot == "[" || after_dot == "(" || is_terminator(after_dot) {
+                        p.pos -= 1;
+                        break;
+                    }
+                }
+            }
+        }
+        name.push('.');
+        name.push_str(&p.next_tok());
+    }
+    name
 }
 
 fn is_terminator(t: &str) -> bool {
@@ -45,6 +71,13 @@ pub fn tokenize(src: &str) -> Vec<String> {
         match chars[i] {
             '(' | ')' | '{' | '}' | '[' | ']' | ':' | ';' | ',' | '|' | '→' => {
                 out.push(' '); out.push(chars[i]); out.push(' ');
+            }
+            '.' => {
+                if i + 1 < chars.len() && (chars[i+1] == '{' || chars[i+1] == '[' || chars[i+1] == '(') {
+                    out.push_str(" . ");
+                } else {
+                    out.push('.');
+                }
             }
             c => out.push(c),
         }
@@ -177,7 +210,7 @@ fn parse_expr(p: &mut Parser) -> PreExpr {
         }
         Some("fix") => {
             p.consume("fix");
-            let fname = p.next_tok();
+            let fname = read_ident(p);
             p.consume(":");
             let ty = parse_expr(p);
             p.consume("=>");
@@ -186,7 +219,7 @@ fn parse_expr(p: &mut Parser) -> PreExpr {
         }
         Some("let") => {
             p.consume("let");
-            let name = p.next_tok();
+            let name = read_ident(p);
             p.consume(":");
             let ty = parse_expr(p);
             p.consume(":=");
@@ -206,7 +239,7 @@ fn parse_expr(p: &mut Parser) -> PreExpr {
             let mut branches = Vec::new();
             while !p.eof() && p.at("|") {
                 p.consume("|");
-                let ctor_name = p.next_tok();
+                let ctor_name = read_ident(p);
                 let mut binder_names = Vec::new();
                 while !p.at("=>") {
                     binder_names.push(p.next_tok());
@@ -231,7 +264,8 @@ pub fn run_script(script: &str, elab: &mut crate::elaborator::Elaborator) {
     while !p.eof() {
         match p.next_tok().as_str() {
             "inductive" => {
-                let name = p.next_tok();
+                let name = read_ident(&mut p);
+                if p.at(".") && p.peek_nth(1) == Some("{") { p.pos += 1; }
                 let uparams = if p.at("{") {
                     p.consume("{");
                     let mut ps = Vec::new();
@@ -249,7 +283,7 @@ pub fn run_script(script: &str, elab: &mut crate::elaborator::Elaborator) {
                 let mut tag = 0;
                 while !p.eof() && p.at("|") {
                     p.consume("|");
-                    let ctor_name = p.next_tok();
+                    let ctor_name = read_ident(&mut p);
                     p.consume(":");
                     let ctor_ty_pre = parse_expr(&mut p);
                     let ctor_ty = elab.elab(&ctor_ty_pre, None, &uparams).unwrap();
@@ -262,7 +296,10 @@ pub fn run_script(script: &str, elab: &mut crate::elaborator::Elaborator) {
                 println!("=> Defined inductive: {}", name);
             }
             "def" => {
-                let name = p.next_tok();
+                let name = read_ident(&mut p);
+                eprintln!("DEBUG def: name='{}' at='{:?}' peek='{:?}'", name, p.peek(), p.peek_nth(1));
+                if p.at(".") && p.peek_nth(1) == Some("{") { p.pos += 1; }
+                eprintln!("DEBUG def after skip: at='{:?}' peek='{:?}'", p.peek(), p.peek_nth(1));
                 let uparams = if p.at("{") {
                     p.consume("{");
                     let mut ps = Vec::new();

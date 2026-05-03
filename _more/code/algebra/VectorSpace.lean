@@ -1,69 +1,67 @@
 -- Algebra: 向量空間
--- 展示向量空間的定義與基本性質
+-- 展示向量空間的基本定義與性質
 
-class VectorSpace (K : Type) (V : Type) [Field K] where
-  add : V → V → V
-  zero : V
-  neg : V → V
-  smul : K → V → V
-  addAssoc : ∀ u v w, add (add u v) w = add u (add v w)
-  zeroAdd : ∀ v, add zero v = v
-  negAdd : ∀ v, add (neg v) v = zero
-  addComm : ∀ u v, add u v = add v u
-  smulAssoc : ∀ a b v, smul (mul a b) v = smul a (smul b v)
-  smulOne : ∀ v, smul one v = v
-  leftDist : ∀ a u v, smul a (add u v) = add (smul a u) (smul a v)
-  rightDist : ∀ a b v, smul (add a b) v = add (smul a v) (smul b v)
+class VectorSpace (α : Type) [Field α] where
+  add : α → α → α
+  zero : α
+  neg : α → α
+  smul : α → α → α
+  one : α
+  addAssoc : ∀ u v w : α, add (add u v) w = add u (add v w)
+  addComm : ∀ u v : α, add u v = add v u
+  zeroAdd : ∀ u : α, add zero u = u
+  addZero : ∀ u : α, add u zero = u
+  negAdd : ∀ u : α, add (neg u) u = zero
+  smulDist : ∀ r s u : α, smul (r * s) u = smul r (smul s u)
+  smulOne : ∀ u : α, smul one u = u
+  smulAddDist : ∀ r u v : α, smul r (add u v) = add (smul r u) (smul r v)
+  addSmulDist : ∀ r s u : α, smul (r + s) u = add (smul r u) (smul s u)
 
-infixr:50 " ⊕ " => VectorSpace.add
-notation:75 "∥v∥" => VectorSpace.smul
+class Field (α : Type) where
+  add : α → α → α
+  mul : α → α → α
+  zero : α
+  one : α
+  neg : α → α
+  inv : α → α
+  addAssoc : ∀ a b c : α, add (add a b) c = add a (add b c)
+  addComm : ∀ a b : α, add a b = add b a
+  zeroAdd : ∀ a : α, add zero a = a
+  negAdd : ∀ a : α, add (neg a) a = zero
+  mulAssoc : ∀ a b c : α, mul (mul a b) c = mul a (mul b c)
+  mulComm : ∀ a b : α, mul a b = mul b a
+  oneMul : ∀ a : α, mul one a = a
+  mulInv : ∀ a : α, a ≠ zero → mul a (inv a) = one
+  mulAddDist : ∀ a b c : α, mul a (add b c) = add (mul a b) (mul a c)
 
--- K-向量的類型
-structure Vec (K : Type) (n : Nat) : Type where
-  coords : List K
-  length_ok : coords.length = n
+namespace Field
 
-def Vec.add {K : Type} [Field K] {n : Nat} (u v : Vec K n) : Vec K n :=
-  ⟨List.zipWith Field.add u.coords v.coords, by simp⟩
+def sub (α : Type) [Field α] (a b : α) : α :=
+  add a (neg b)
 
-def Vec.smul {K : Type} [Field K] {n : Nat} (a : K) (v : Vec K n) : Vec K n :=
-  ⟨List.map (Field.mul a) v.coords, by simp⟩
+def div (α : Type) [Field α] (a b : α) : α :=
+  mul a (inv b)
 
-def Vec.zero {K : Type} [Field K] {n : Nat} : Vec K n :=
-  ⟨List.replicate n K.zero, by simp⟩
+end Field
 
-def Vec.neg {K : Type} [Field K] {n : Nat} (v : Vec K n) : Vec K n :=
-  ⟨List.map Field.neg v.coords, by simp⟩
+instance : Field Float where
+  add := Float.add
+  mul := Float.mul
+  zero := 0.0
+  one := 1.0
+  neg := Float.neg
+  inv a := 1.0 / a
+  addAssoc := Float.add_assoc
+  addComm := Float.add_comm
+  zeroAdd := Float.zero_add
+  negAdd := Float.add_neg_cancel
+  mulAssoc := Float.mul_assoc
+  mulComm := Float.mul_comm
+  oneMul := Float.one_mul
+  mulInv _ := Float.div_mul_cancel
+  mulAddDist := Float.mul_add_distrib_left
 
--- 標準基底向量
-def stdBasis {K : Type} [Field K] {n : Nat} (i : Nat) (hi : i < n) : Vec K n := by
-  sorry
+#check Field
+#check VectorSpace
 
--- 點積
-def dotProduct {K : Type} [Field K] {n : Nat} (u v : Vec K n) : K :=
-  List.foldl (· + ·) K.zero (List.zipWith Field.mul u.coords v.coords)
-
--- 向量範數（歐氏範數）
-def norm {K : Type} [Field K] {n : Nat} (v : Vec K n) : K :=
-  sqrt (dotProduct v v)
-
--- 線性組合
-def linearCombination {K : Type} [Field K] {n : Nat}
-  (cs : List K) (vs : List (Vec K n)) (h : cs.length = vs.length) : Vec K n := by
-  sorry
-
--- 線性相關
-def linearlyDependent {K : Type} [Field K] {n : Nat} (vs : List (Vec K n)) : Prop :=
-  ∃ (cs : List K) (h : cs ≠ []) (hc : cs.length = vs.length),
-    linearCombination cs vs h = Vec.zero ∧ cs ≠ List.replicate vs.length K.zero
-
--- 正交性
-def orthogonal {K : Type} [Field K] {n : Nat} (u v : Vec K n) : Prop :=
-  dotProduct u v = K.zero
-
--- 正交補空間
-def orthogonalComplement {K : Type} [Field K] {n : Nat}
-  (S : List (Vec K n)) : List (Vec K n) :=
-  List.filter (fun v => ∀ s ∈ S, orthogonal v s) (standardOnb n)
-
-end
+example : Field Float := inferInstance

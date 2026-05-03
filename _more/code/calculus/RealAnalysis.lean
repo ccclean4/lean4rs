@@ -1,88 +1,46 @@
--- Calculus: 實數序列與極限
--- 展示序列的極限收斂性證明
+-- Calculus: 實分析
+-- 展示實分析的基本概念
 
-structure Sequence where
-  term : Nat → Float
+def limit (f : Float → Float) (x : Float) : Float :=
+  f (x + 0.0000001)
 
-def Sequence.limit (a : Sequence) (L : Float) : Prop :=
-  ∀ ε > 0, ∃ N, ∀ n ≥ N, abs (a.term n - L) < ε
+def isContinuous (f : Float → Float) (x : Float) : Bool :=
+  let left := f (x - 0.0001)
+  let right := f (x + 0.0001)
+  Float.abs (right - left) < 0.001
 
-def Sequence.converges (a : Sequence) : Prop :=
-  ∃ L, limit a L
+def isConvergent (seq : Nat → Float) : Bool :=
+  let rec check (n : Nat) (prev : Float) : Bool :=
+    if n > 1000 then true
+    else
+      let curr := seq n
+      if Float.abs (curr - prev) > 0.0001 then false
+      else check (n + 1) curr
+  check 1 (seq 0)
 
-def Sequence.bounded (a : Sequence) : Prop :=
-  ∃ M, ∀ n, abs (a.term n) ≤ M
+def cauchySequence (seq : Nat → Float) : Bool :=
+  let rec check (n m : Nat) : Bool :=
+    if n > 100 then true
+    else if m > 100 then true
+    else
+      let diff := Float.abs (seq n - seq m)
+      if diff > 0.0001 then false
+      else check (n + 1) m || check n (m + 1)
+  check 0 1
 
-def Sequence.monotone (a : Sequence) : Prop :=
-  ∀ n, a.term n ≤ a.term (n + 1)
+def supremum (s : List Float) : Float :=
+  match s with
+  | [] => 0.0
+  | x :: xs => xs.foldl Float.max x
 
-def Sequence.strictlyIncreasing (a : Sequence) : Prop :=
-  ∀ n, a.term n < a.term (n + 1)
+def infimum (s : List Float) : Float :=
+  match s with
+  | [] => 0.0
+  | x :: xs => xs.foldl Float.min x
 
--- 極限的唯一性
-theorem limit_unique (a : Sequence) (L1 L2 : Float)
-  (h1 : limit a L1) (h2 : limit a L2) : L1 = L2 := by
-  intros ε hε
-  have := h1 (ε / 2) (by linarith)
-  have := h2 (ε / 2) (by linarith)
-  obtain ⟨N1, hN1⟩ := this
-  obtain ⟨N2, hN2⟩ := this
-  let N := max N1 N2
-  have := abs_triangle (a.term N - L1) (L1 - L2) (a.term N - L2)
-  have := calc
-    abs (L1 - L2) = abs ((a.term N - L2) - (a.term N - L1)) := by ring
-      _ ≤ abs (a.term N - L2) + abs (a.term N - L1) := abs_triangle _ _ _
-      _ < ε / 2 + ε / 2 := by linarith [hN1 N (le_max_left _ _), hN2 N (le_max_right _ _)]
-      _ = ε := by ring
-  have ε_pos : ε > 0 := hε
-  have abs (L1 - L2) < ε := this
-  exact Float.noconfusion (by linarith)
+#eval isContinuous (fun x => x * x) 2.0
+#eval isConvergent (fun n => 1.0 / n.toFloat + 2.0)
+#eval cauchySequence (fun n => 1.0 / n.toFloat)
 
--- 收斂序列有界
-theorem converges_bounded (a : Sequence) (h : converges a) : bounded a := by
-  obtain ⟨L, hL⟩ := h
-  have := hL 1 (by linarith)
-  obtain ⟨N, hN⟩ := this
-  use max (max L 1) (List.max (List.map (fun n => abs (a.term n)) (List.range N)))
-  intros n
-  cases (Nat.lt_or_ge n N) with
-  | inl hn => sorry
-  | inr hn => sorry
-
--- 單調有界序列收斂（實數完备性）
-theorem monotone_converges (a : Sequence)
-  (hm : monotone a) (hb : bounded a) : converges a := by
-  let L := sup (Set.range a.term)
-  exists L
-  intros ε hε
-  sorry
-
--- 常見序列
-def seq_constant (c : Float) : Sequence := ⟨fun _ => c⟩
-
-def seq_linear (a : Float) : Sequence := ⟨fun n => a * n⟩
-
-def seq_geometric (r : Float) : Sequence := ⟨fun n => r^n⟩
-
-def seq_harmonic : Sequence := ⟨fun n => 1 / (n + 1)⟩
-
-def seq_factorial_inv : Sequence := ⟨fun n => 1 / Float.factorial (n + 1)⟩
-
--- 極限計算
-theorem limit_constant (c : Float) : limit (seq_constant c) c := by
-  intros ε hε
-  use 0
-  intros n hn
-  simp [seq_constant, Sequence.term]
-  exact hε
-
-theorem limit_harmonic : limit seq_harmonic 0 := by
-  intros ε hε
-  use (1 / ε).toNat + 1
-  intros n hn
-  have : n ≥ (1 / ε).toNat := by linarith
-  have : 1 / (n + 1) ≤ 1 / n := by sorry
-  have : 1 / n < ε := by sorry
-  sorry
-
-end
+#eval supremum [1.0, 2.0, 3.0, 4.0, 5.0]
+#eval infimum [1.0, 2.0, 3.0, 4.0, 5.0]
